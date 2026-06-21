@@ -1,74 +1,69 @@
-# ARC (Auto-Real-time Capture)
+# ARC (Auto-Real-time Capture) 📸
 
-Welcome to the ARC project! This application is designed to facilitate real-time photo sharing and capture.
+**ARC** is a modern, open-source real-time photo-sharing platform designed for live events. 
+Instead of chasing down friends for photos after a wedding, party, or meetup, ARC lets guests instantly upload and view photos on a shared live gallery. No app downloads or account creation required!
 
-## Overview
-ARC (Auto-Real-time Capture) enables users to automatically capture and share moments in real-time, leveraging a modern tech stack to provide a seamless and responsive experience. It is designed as an offline-capable, real-time application where guests can effortlessly share photos at events.
+![ARC Landing Page](/public/vite.svg) *Replace with a screenshot of your landing page*
 
-## Tech Stack
-- **Frontend Framework:** [React 19](https://react.dev/) via [Vite](https://vitejs.dev/) for an ultra-fast development experience and optimized production builds.
-- **Styling:** [Tailwind CSS 4](https://tailwindcss.com/) using PostCSS for rapid, utility-first UI development.
-- **Backend & Database:** [Firebase](https://firebase.google.com/) ecosystem:
-  - **Firestore:** For real-time database syncing across connected clients.
-  - **Firebase Storage:** For secure image hosting.
-  - **Firebase Auth:** For user authentication and security rules.
-- **Icons:** [Lucide React](https://lucide.dev/) for beautiful, consistent SVG iconography.
-- **Utilities:** `qrcode.react` for generating dynamic event access QR codes, and `browser-image-compression` for optimizing images before upload.
+## ✨ Features
 
-## Basic Workflow
-1. **Event Creation:** A host logs in and creates a new event from their Dashboard. This generates a unique Event ID in Firestore.
-2. **Sharing:** The application automatically generates a QR Code linked to the live Event URL (`/event/:eventId`).
-3. **Guest Access:** Guests simply scan the QR Code using their smartphone cameras—no app downloads or accounts are required.
-4. **Capture & Upload:** Guests take pictures or select existing files. The images are compressed in the browser and uploaded directly to Firebase Storage.
-5. **Real-Time Sync:** Firestore synchronizes the new image data (URLs and metadata) to all devices currently viewing the event, updating the live gallery instantly.
+- **⚡ Real-time Sync:** Powered by Supabase Realtime. Photos appear instantly on everyone's screen the second they are uploaded.
+- **📱 Zero Friction for Guests:** Guests simply scan a QR code. No app downloads, no account creation, no hassle.
+- **🎨 Custom QR Codes:** Generate and customize a unique QR code for your event. Print it out and place it on tables!
+- **📸 Direct Camera Access:** Guests can snap a live photo or upload an existing one from their camera roll.
+- **⬇️ Scan-to-Save:** Guests can walk up to a screen displaying the gallery, scan a specific photo's QR code, and download it instantly to their phone.
+- **🔒 Secure & Private:** Backed by Row Level Security. Only you can manage your events and bulk-delete photos.
 
-## Environment Variables
+## 🚀 Tech Stack
 
-This project requires Firebase configuration to function properly. 
+- **Frontend:** React, Vite, Tailwind CSS
+- **Routing:** React Router v6
+- **Icons:** Lucide React
+- **Backend/Database:** Supabase (PostgreSQL, Storage, Auth, Realtime)
 
-1. Create a new Firebase Project in the [Firebase Console](https://console.firebase.google.com/).
-2. Register a web application within the project.
-3. Enable **Firestore** and **Firebase Storage** in your console.
-4. Copy your configuration values and add them to the `.env` file at the root of the project.
+## 🛠️ Getting Started
 
-A `.env.example` file is included in this repository. Ensure your `.env` file looks like this:
+Follow these instructions to set up your own instance of ARC.
 
-```env
-VITE_FIREBASE_API_KEY=your_api_key
-VITE_FIREBASE_AUTH_DOMAIN=your_auth_domain
-VITE_FIREBASE_PROJECT_ID=your_project_id
-VITE_FIREBASE_STORAGE_BUCKET=your_storage_bucket
-VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
-VITE_FIREBASE_APP_ID=your_app_id
+### 1. Clone the repository
+```bash
+git clone https://github.com/Alwin-Saji/QR.git
+cd QR/ARC
 ```
 
-## Getting Started
+### 2. Install Dependencies
+```bash
+npm install
+```
 
-Follow these instructions to run the project locally.
+### 3. Supabase Setup
+You will need a free [Supabase](https://supabase.com/) account.
+1. Create a new project.
+2. Go to the **SQL Editor** in your Supabase dashboard and run the entire script found in `database.sql`. This will create your tables and apply all necessary security policies.
+3. Go to **Storage** and create a new public bucket named exactly `events`.
+4. Go to **Authentication -> Providers** and ensure Email/Password login is enabled.
 
-1. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+### 4. Environment Variables
+Copy the `.env.example` file to `.env`:
+```bash
+cp .env.example .env
+```
+Fill in your Supabase URL and Anon Key (found in your Supabase project settings):
+```env
+VITE_SUPABASE_URL=your_supabase_url_here
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
+```
 
-2. **Set up Environment Variables:**
-   If you haven't already, copy the `.env.example` file to create a `.env` file and populate it with your Firebase keys.
-   ```bash
-   cp .env.example .env
-   ```
+### 5. Run the App Locally
+```bash
+npm run dev
+```
+Your app should now be running on `http://localhost:5173`!
 
-3. **Run the development server:**
-   ```bash
-   npm run dev
-   ```
+## 🤝 Contributing
 
-4. **Build for Production:**
-   ```bash
-   npm run build
-   ```
+Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/Alwin-Saji/QR/issues).
 
-## Available Scripts
-- `npm run dev` - Starts the Vite development server with Hot Module Replacement (HMR).
-- `npm run build` - Builds the application for production into the `dist` folder.
-- `npm run preview` - Locally preview the production build.
-- `npm run lint` - Runs ESLint to check for code quality issues.
+## 📄 License
+
+This project is open-source and available under the [MIT License](LICENSE).

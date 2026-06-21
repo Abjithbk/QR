@@ -1,119 +1,172 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Camera, Plus, Calendar, Settings } from 'lucide-react';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Plus, Calendar, ArrowRight, Trash2 } from 'lucide-react';
+import { supabase } from '../services/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Dashboard() {
   const [eventName, setEventName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [events, setEvents] = useState([]);
+  const [loadingEvents, setLoadingEvents] = useState(true);
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const fetchEvents = async () => {
+    if (!user) return;
+    try {
+      const { data, error } = await supabase
+        .from('events')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      
+      if (error) {
+        console.error("Error fetching events:", error);
+      } else {
+        setEvents(data || []);
+      }
+    } catch (error) {
+      console.error("Error fetching events:", error);
+    } finally {
+      setLoadingEvents(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEvents();
+  }, [user]);
 
   const handleCreateEvent = async (e) => {
     e.preventDefault();
-    if (!eventName.trim()) return;
+    if (!eventName.trim() || !user) return;
 
     try {
       setIsCreating(true);
-      // In a real app, ensure user is authenticated first
-      const docRef = await addDoc(collection(db, 'events'), {
-        name: eventName,
-        createdAt: serverTimestamp(),
-        // ownerId: auth.currentUser.uid
-      });
+      const { data, error } = await supabase
+        .from('events')
+        .insert([{ name: eventName, user_id: user.id }])
+        .select();
+
+      if (error) throw error;
       
-      navigate(`/event/${docRef.id}`);
+      if (data && data.length > 0) {
+        navigate(`/event/${data[0].id}`);
+      }
     } catch (error) {
       console.error("Error creating event: ", error);
-      alert("Failed to create event. Please check your Firebase configuration.");
+      alert("Failed to create event. Please check your Supabase configuration.");
     } finally {
       setIsCreating(false);
     }
   };
 
+  const handleDeleteEvent = async (e, eventId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!window.confirm("Are you sure you want to delete this event and all its photos?")) return;
+
+    try {
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .eq('id', eventId);
+        
+      if (error) throw error;
+      
+      // Update local state to remove the deleted event
+      setEvents(events.filter(event => event.id !== eventId));
+    } catch (error) {
+      console.error("Error deleting event:", error);
+      alert("Failed to delete event.");
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar Navigation */}
-      <aside className="w-64 bg-white border-r border-gray-200 hidden md:flex flex-col">
-        <div className="p-6 border-b border-gray-200 flex items-center gap-2 text-blue-600 font-bold text-xl">
-          <Camera className="w-6 h-6" />
-          <span>ARC (Auto-Real-time Capture)</span>
+    <div className="w-full min-h-full bg-theme-1 text-theme-4 pt-20 md:pt-0">
+      <div className="p-8 max-w-4xl mx-auto">
+        <div className="flex justify-between items-end mb-8">
+          <div>
+            <h1 className="text-5xl font-heading font-bold text-theme-4">Dashboard</h1>
+            <p className="text-theme-4/80 mt-2 text-lg">Manage your photo-sharing events</p>
+          </div>
         </div>
-        <nav className="p-4 flex-1 space-y-2">
-          <NavItem icon={<Calendar className="w-5 h-5" />} label="My Events" active />
-          <NavItem icon={<Settings className="w-5 h-5" />} label="Settings" />
-        </nav>
-      </aside>
 
-      {/* Main Content */}
-      <main className="flex-1">
-        <header className="bg-white p-6 border-b border-gray-200 flex justify-between items-center md:hidden">
-            <div className="flex items-center gap-2 text-blue-600 font-bold text-xl">
-                <Camera className="w-6 h-6" />
-                <span>ARC (Auto-Real-time Capture)</span>
+        {/* Create Event Card */}
+        <div className="bg-theme-2 rounded-2xl shadow-lg border border-theme-3/20 p-8">
+          <div className="flex flex-col md:flex-row items-start gap-6">
+            <div className="bg-theme-3/20 p-4 rounded-xl text-theme-3">
+              <Plus className="w-8 h-8" />
             </div>
-        </header>
-
-        <div className="p-8 max-w-4xl mx-auto">
-          <div className="flex justify-between items-end mb-8">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-              <p className="text-gray-500 mt-1">Manage your photo-sharing events</p>
-            </div>
-          </div>
-
-          {/* Create Event Card */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-            <div className="flex items-start gap-4">
-              <div className="bg-blue-100 p-4 rounded-xl text-blue-600">
-                <Plus className="w-8 h-8" />
-              </div>
-              <div className="flex-1">
-                <h2 className="text-xl font-bold text-gray-900 mb-2">Create New Event</h2>
-                <p className="text-gray-500 mb-6">Start a new real-time photo gallery for your guests.</p>
-                
-                <form onSubmit={handleCreateEvent} className="flex gap-4 max-w-md">
-                  <input
-                    type="text"
-                    value={eventName}
-                    onChange={(e) => setEventName(e.target.value)}
-                    placeholder="E.g., Sarah's Birthday"
-                    className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                    disabled={isCreating}
-                  />
-                  <button
-                    type="submit"
-                    disabled={!eventName.trim() || isCreating}
-                    className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
-                  >
-                    {isCreating ? 'Creating...' : 'Create'}
-                  </button>
-                </form>
-              </div>
+            <div className="flex-1 w-full">
+              <h2 className="text-3xl font-heading font-bold text-theme-4 mb-2">Create New Event</h2>
+              <p className="text-theme-4/80 mb-6">Start a new real-time photo gallery for your guests.</p>
+              
+              <form onSubmit={handleCreateEvent} className="flex flex-col sm:flex-row gap-4 max-w-md w-full">
+                <input
+                  type="text"
+                  value={eventName}
+                  onChange={(e) => setEventName(e.target.value)}
+                  placeholder="E.g., Sarah's Birthday"
+                  className="flex-1 bg-theme-1 border border-theme-3/30 text-theme-4 placeholder:text-theme-4/40 rounded-lg px-4 py-2 focus:ring-2 focus:ring-theme-3 focus:border-theme-3 outline-none transition-all w-full"
+                  disabled={isCreating}
+                />
+                <button
+                  type="submit"
+                  disabled={!eventName.trim() || isCreating}
+                  className="bg-theme-3 text-theme-1 px-6 py-2 rounded-lg font-bold hover:bg-theme-4 disabled:opacity-50 transition-colors whitespace-nowrap"
+                >
+                  {isCreating ? 'Creating...' : 'Create'}
+                </button>
+              </form>
             </div>
           </div>
+        </div>
 
-          {/* Placeholder for Event List */}
-          <div className="mt-12">
-             <h3 className="text-lg font-bold text-gray-900 mb-4">Recent Events</h3>
-             <div className="bg-white rounded-xl border border-dashed border-gray-300 p-12 text-center text-gray-500">
-                <Calendar className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+        {/* Event List */}
+        <div className="mt-12">
+            <h3 className="text-3xl font-heading font-bold text-theme-4 mb-6">Recent Events</h3>
+            {loadingEvents ? (
+              <div className="flex justify-center p-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-3"></div>
+              </div>
+            ) : events.length === 0 ? (
+              <div className="bg-theme-2 rounded-xl border border-dashed border-theme-3/40 p-12 text-center text-theme-4/60">
+                <Calendar className="w-12 h-12 mx-auto mb-4 text-theme-3/60" />
                 <p>No events found. Create one above!</p>
-             </div>
-          </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {events.map((event) => (
+                  <Link 
+                    key={event.id} 
+                    to={`/event/${event.id}`}
+                    className="bg-theme-2 p-6 rounded-xl border border-theme-3/20 hover:border-theme-3/60 transition-all flex justify-between items-center group shadow-sm hover:shadow-md"
+                  >
+                    <div>
+                      <h4 className="font-heading font-bold text-xl text-theme-4">{event.name}</h4>
+                      <p className="text-sm text-theme-4/60 mt-1">
+                        {new Date(event.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button 
+                        onClick={(e) => handleDeleteEvent(e, event.id)}
+                        className="p-2 text-theme-4/40 hover:text-red-500 hover:bg-red-500/10 rounded-full transition-colors z-10"
+                        title="Delete Event"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                      <ArrowRight className="w-5 h-5 text-theme-3 opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:translate-x-1" />
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
         </div>
-      </main>
+      </div>
     </div>
-  );
-}
-
-function NavItem({ icon, label, active }) {
-  return (
-    <a href="#" className={`flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${
-      active ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-    }`}>
-      {icon}
-      {label}
-    </a>
   );
 }

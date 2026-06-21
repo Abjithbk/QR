@@ -1,12 +1,45 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Great+Vibes&display=swap');
+
+@font-face {
+  font-family: 'Rosaline';
+  src: url('./assets/font/Rosaline.woff2') format('woff2'),
+       url('./assets/font/Rosaline.woff') format('woff'),
+       url('./assets/font/Rosaline.ttf') format('truetype'),
+       url('./assets/font/Rosaline.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+:root {
+  --theme-color-1: #622B14;
+  --theme-color-2: #995F2F;
+  --theme-color-3: #978F66;
+  --theme-color-4: #E4D6A9;
+}
 
 @theme {
-  --font-sans: "Inter", system-ui, sans-serif;
+  --color-theme-1: #622B14;
+  --color-theme-2: #995F2F;
+  --color-theme-3: #978F66;
+  --color-theme-4: #E4D6A9;
+
+  --font-sans: "Bricolage Grotesque", system-ui, sans-serif;
+  --font-heading: 'Rosaline', 'Great Vibes', cursive;
 }
 
 @layer base {
   html {
     font-family: var(--font-sans);
     -webkit-tap-highlight-color: transparent;
+  }
+  
+  body {
+    background-color: var(--theme-color-1);
+    color: var(--theme-color-4);
+  }
+
+  h1, h2, h3, h4, h5, h6, .title {
+    font-family: var(--font-heading);
   }
 }

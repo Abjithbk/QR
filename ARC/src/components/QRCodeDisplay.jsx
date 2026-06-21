@@ -1,31 +1,102 @@
-import React from 'react';
-import { QRCodeSVG } from 'qrcode.react';
+import React, { useState, useRef } from 'react';
+import { QRCodeCanvas } from 'qrcode.react';
+import { Download, Copy, Settings2 } from 'lucide-react';
 
 export default function QRCodeDisplay({ url, title = "Join Event" }) {
+  const [fgColor, setFgColor] = useState('#000000');
+  const [bgColor, setBgColor] = useState('#ffffff');
+  const [showSettings, setShowSettings] = useState(false);
+  const qrRef = useRef(null);
+
+  const downloadQR = () => {
+    const canvas = qrRef.current.querySelector('canvas');
+    if (!canvas) return;
+    
+    const pngUrl = canvas
+      .toDataURL("image/png")
+      .replace("image/png", "image/octet-stream");
+      
+    let downloadLink = document.createElement("a");
+    downloadLink.href = pngUrl;
+    downloadLink.download = `${title.replace(/\s+/g, '_')}_QR.png`;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+  };
+
   return (
-    <div className="flex flex-col items-center justify-center p-6 bg-white rounded-2xl shadow-xl max-w-sm w-full mx-auto">
-      <h3 className="text-xl font-bold text-gray-800 mb-4">{title}</h3>
-      <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-inner mb-6">
-        <QRCodeSVG 
+    <div className="flex flex-col items-center justify-center w-full">
+      <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm mb-6" ref={qrRef}>
+        <QRCodeCanvas 
           value={url} 
-          size={200}
-          bgColor={"#ffffff"}
-          fgColor={"#000000"}
+          size={220}
+          bgColor={bgColor}
+          fgColor={fgColor}
           level={"Q"}
-          includeMargin={false}
+          includeMargin={true}
+          imageSettings={{
+            src: "/vite.svg", // Fallback logo if they have one, or remove. Let's just do colors for now to keep it clean.
+            x: undefined,
+            y: undefined,
+            height: 24,
+            width: 24,
+            excavate: true,
+          }}
         />
       </div>
-      <p className="text-sm text-gray-500 text-center mb-4">
-        Scan this QR code to join the event and start sharing photos!
-      </p>
-      <button 
-        onClick={() => {
-          navigator.clipboard.writeText(url);
-        }}
-        className="text-blue-600 font-medium hover:text-blue-700 hover:underline px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors"
-      >
-        Copy Link
-      </button>
+
+      <div className="flex gap-2 w-full mb-6">
+        <button 
+          onClick={() => navigator.clipboard.writeText(url)}
+          className="flex-1 flex items-center justify-center gap-2 bg-theme-1 text-theme-4 font-bold px-4 py-3 rounded-xl border border-theme-3/20 hover:bg-theme-3/10 transition-colors"
+        >
+          <Copy className="w-5 h-5" /> Copy Link
+        </button>
+        <button 
+          onClick={downloadQR}
+          className="flex-1 flex items-center justify-center gap-2 bg-theme-3 text-theme-1 font-bold px-4 py-3 rounded-xl hover:bg-theme-4 transition-colors"
+        >
+          <Download className="w-5 h-5" /> Save QR
+        </button>
+      </div>
+
+      <div className="w-full">
+        <button 
+          onClick={() => setShowSettings(!showSettings)}
+          className="w-full flex items-center justify-center gap-2 text-theme-4/60 hover:text-theme-4 font-semibold py-2 transition-colors"
+        >
+          <Settings2 className="w-4 h-4" /> {showSettings ? "Hide Customization" : "Customize Colors"}
+        </button>
+
+        {showSettings && (
+          <div className="mt-4 p-4 bg-theme-1 rounded-xl border border-theme-3/10 flex justify-between gap-4">
+            <div className="flex-1">
+              <label className="block text-xs font-bold text-theme-4/60 mb-1 uppercase tracking-wider">Pattern Color</label>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="color" 
+                  value={fgColor} 
+                  onChange={(e) => setFgColor(e.target.value)}
+                  className="w-8 h-8 rounded cursor-pointer border-0 p-0"
+                />
+                <span className="text-sm font-mono">{fgColor}</span>
+              </div>
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs font-bold text-theme-4/60 mb-1 uppercase tracking-wider">Background</label>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="color" 
+                  value={bgColor} 
+                  onChange={(e) => setBgColor(e.target.value)}
+                  className="w-8 h-8 rounded cursor-pointer border-0 p-0"
+                />
+                <span className="text-sm font-mono">{bgColor}</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

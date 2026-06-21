@@ -10,8 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.108.2",
     "browser-image-compression": "^2.0.2",
-    "firebase": "^12.14.0",
     "lucide-react": "^1.18.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.6",

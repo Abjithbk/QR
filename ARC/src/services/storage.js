@@ -1,7 +1,5 @@
 import imageCompression from 'browser-image-compression';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { storage, db } from './firebase';
+import { supabase } from './supabase';
 
 export const compressImage = async (file) => {
   const options = {
@@ -21,41 +19,49 @@ export const compressImage = async (file) => {
 export const uploadPhoto = async (eventId, file, uploaderId) => {
   const compressedFile = await compressImage(file);
   const fileName = `${Date.now()}_${compressedFile.name}`;
-  const storageRef = ref(storage, `events/${eventId}/${fileName}`);
+  const filePath = `${eventId}/${fileName}`;
 
-  const uploadTask = uploadBytesResumable(storageRef, compressedFile);
+  // Upload to Supabase Storage
+  const { data: uploadData, error: uploadError } = await supabase
+    .storage
+    .from('events')
+    .upload(filePath, compressedFile);
 
-  return new Promise((resolve, reject) => {
-    uploadTask.on(
-      'state_changed',
-      (snapshot) => {
-        // Handle progress
-        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        console.log('Upload is ' + progress + '% done');
-      },
-      (error) => {
-        console.error('Upload failed:', error);
-        reject(error);
-      },
-      async () => {
-        try {
-          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-          // 1-day TTL: Appending expiresAt for Firestore TTL
-          const expiresAt = new Date();
-          expiresAt.setDate(expiresAt.getDate() + 1);
+  if (uploadError) {
+    console.error('Upload failed:', uploadError);
+    throw uploadError;
+  }
 
-          const docRef = await addDoc(collection(db, `events/${eventId}/photos`), {
-            url: downloadURL,
-            uploadedBy: uploaderId,
-            createdAt: serverTimestamp(),
-            expiresAt: expiresAt,
-          });
-          resolve({ id: docRef.id, url: downloadURL });
-        } catch (dbError) {
-          console.error('Database record failed:', dbError);
-          reject(dbError);
-        }
+  // Get public URL
+  const { data: publicUrlData } = supabase
+    .storage
+    .from('events')
+    .getPublicUrl(filePath);
+
+  const downloadURL = publicUrlData.publicUrl;
+
+  // 1-day TTL
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 1);
+
+  // Insert record into Supabase Database
+  const { data: dbData, error: dbError } = await supabase
+    .from('photos')
+    .insert([
+      {
+        event_id: eventId,
+        url: downloadURL,
+        uploaded_by: uploaderId,
+        expires_at: expiresAt.toISOString(),
       }
-    );
-  });
+    ])
+    .select()
+    .single();
+
+  if (dbError) {
+    console.error('Database record failed:', dbError);
+    throw dbError;
+  }
+
+  return { id: dbData.id, url: dbData.url };
 };

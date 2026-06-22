@@ -251,7 +251,7 @@ export default function Gallery({ eventId, isCreator }) {
             
             <div className="bg-white p-4 rounded-2xl shadow-inner mb-6">
               <QRCodeSVG 
-                value={selectedPhotoForQR.url} 
+                value={`${selectedPhotoForQR.url}?download=`} 
                 size={220}
                 level="L"
               />

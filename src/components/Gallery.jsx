@@ -19,6 +19,9 @@ export default function Gallery({ eventId, isCreator }) {
   useEffect(() => {
     if (!eventId) return;
 
+    setPage(0);
+    setHasMore(true);
+
     const fetchPhotos = async (pageNum = 0) => {
       if (pageNum === 0) setLoading(true);
       else setLoadingMore(true);

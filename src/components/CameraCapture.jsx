@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { Camera, Upload, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Camera, Loader2, Image as ImageIcon } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { uploadPhoto } from '../services/storage';
 
 export default function CameraCapture({ eventId, userId }) {
@@ -21,7 +22,14 @@ export default function CameraCapture({ eventId, userId }) {
 
     try {
       setIsUploading(true);
-      await uploadPhoto(eventId, file, userId || 'anonymous');
+      await toast.promise(
+        uploadPhoto(eventId, file, userId || 'anonymous'),
+        {
+          loading: 'Uploading photo...',
+          success: 'Photo uploaded!',
+          error: 'Photo upload failed',
+        }
+      );
     } catch (error) {
       console.error("Upload failed", error);
     } finally {

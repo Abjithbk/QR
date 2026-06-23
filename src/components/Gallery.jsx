@@ -1,5 +1,7 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { supabase } from '../services/supabase';import { QRCodeSVG } from 'qrcode.react';
+import React, { useEffect, useState, useRef } from 'react';
+import toast from 'react-hot-toast';
+import { supabase } from '../services/supabase';
+import { QRCodeSVG } from 'qrcode.react';
 import { Download, QrCode, X, Trash2, CheckCircle2 } from 'lucide-react';
 
 export default function Gallery({ eventId, isCreator }) {
@@ -153,9 +155,12 @@ export default function Gallery({ eventId, isCreator }) {
 
       setSelectionMode(false);
       setSelectedIds([]);
+      toast.success(
+        `${photosToDelete.length} photo${photosToDelete.length === 1 ? '' : 's'} deleted`
+      );
     } catch (error) {
       console.error("Error bulk deleting:", error);
-      alert("Failed to delete photos.");
+      toast.error('Failed to delete photos');
     } finally {
       setIsDeleting(false);
     }

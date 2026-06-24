@@ -16,9 +16,32 @@ export const compressImage = async (file) => {
   }
 };
 
+export const updateDisplayName = async (eventId, guestId, displayName, options = {}) => {
+  const nextDisplayName = displayName?.trim();
+
+  if (!nextDisplayName) {
+    throw new Error('Enter a display name first.');
+  }
+
+  const { data, error } = await supabase.rpc('refresh_uploader_display_name', {
+    p_event_id: eventId,
+    p_uploader_id: guestId,
+    p_display_name: nextDisplayName,
+    p_is_creator: Boolean(options.isCreator),
+  });
+
+  if (error) {
+    console.error('Display name refresh failed:', error);
+    throw error;
+  }
+
+  return data?.trim() || nextDisplayName;
+};
+
 export const uploadPhoto = async (eventId, file, uploader) => {
-  const uploadedBy = uploader?.displayName?.trim() || uploader?.guestId || 'Guest';
+  let uploadedBy = uploader?.displayName?.trim() || uploader?.guestId || 'Guest';
   const uploaderId = uploader?.guestId || uploadedBy;
+  const shouldRefreshDisplayName = Boolean(uploader?.displayName?.trim() && uploaderId);
 
   const { data: restriction, error: restrictionError } = await supabase
     .from('restricted_uploaders')
@@ -34,6 +57,12 @@ export const uploadPhoto = async (eventId, file, uploader) => {
 
   if (restriction) {
     throw new Error('This guest has been restricted from uploading more photos.');
+  }
+
+  if (shouldRefreshDisplayName) {
+    uploadedBy = await updateDisplayName(eventId, uploaderId, uploadedBy, {
+      isCreator: uploader?.isCreator,
+    });
   }
 
   const compressedFile = await compressImage(file);

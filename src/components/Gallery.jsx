@@ -4,7 +4,7 @@ import { supabase } from '../services/supabase';
 import { QRCodeSVG } from 'qrcode.react';
 import { Download, QrCode, X, Trash2, CheckCircle2, Ban } from 'lucide-react';
 
-export default function Gallery({ eventId, eventName, isCreator }) {
+export default function Gallery({ eventId, eventName, isCreator, currentUploaderId }) {
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPhotoForQR, setSelectedPhotoForQR] = useState(null);
@@ -12,6 +12,9 @@ export default function Gallery({ eventId, eventName, isCreator }) {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [restrictionTarget, setRestrictionTarget] = useState(null);
+  const [removeRestrictedPhotos, setRemoveRestrictedPhotos] = useState(false);
+  const [isRestricting, setIsRestricting] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(0);
@@ -55,17 +58,38 @@ export default function Gallery({ eventId, eventName, isCreator }) {
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
           table: 'photos',
           filter: `event_id=eq.${eventId}`
         },
         (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setPhotos((current) => [payload.new, ...current]);
-          } else if (payload.eventType === 'DELETE') {
-            setPhotos((current) => current.filter(p => p.id !== payload.old.id));
-          }
+          setPhotos((current) => [payload.new, ...current]);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'photos',
+          filter: `event_id=eq.${eventId}`
+        },
+        (payload) => {
+          setPhotos((current) => current.map((photo) => (
+            photo.id === payload.new.id ? payload.new : photo
+          )));
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'photos'
+        },
+        (payload) => {
+          setPhotos((current) => current.filter(p => p.id !== payload.old.id));
         }
       )
       .subscribe();
@@ -172,7 +196,25 @@ export default function Gallery({ eventId, eventName, isCreator }) {
     const uploaderId = photo.uploader_id?.trim() || photo.uploaded_by?.trim();
     const uploaderName = photo.uploaded_by?.trim() || uploaderId || 'Guest';
     if (!uploaderId) return;
-    if (!window.confirm(`Restrict ${uploaderName} from uploading more photos? Existing photos will stay visible.`)) return;
+    if (uploaderId === currentUploaderId) {
+      toast.error("You can't restrict yourself.");
+      return;
+    }
+    setRestrictionTarget({ uploaderId, uploaderName });
+    setRemoveRestrictedPhotos(false);
+  };
+
+  const closeRestrictionModal = () => {
+    if (isRestricting) return;
+    setRestrictionTarget(null);
+    setRemoveRestrictedPhotos(false);
+  };
+
+  const confirmRestrictUploader = async () => {
+    if (!restrictionTarget) return;
+
+    const { uploaderId, uploaderName } = restrictionTarget;
+    setIsRestricting(true);
 
     const { error } = await supabase
       .from('restricted_uploaders')
@@ -180,10 +222,44 @@ export default function Gallery({ eventId, eventName, isCreator }) {
 
     if (error && error.code !== '23505') {
       console.error("Error restricting uploader:", error);
-      alert("Failed to restrict uploader.");
+      toast.error("Failed to restrict guest.");
     } else {
+      if (removeRestrictedPhotos) {
+        const photosToDelete = photos.filter((item) => {
+          const itemUploaderId = item.uploader_id?.trim() || item.uploaded_by?.trim();
+          return itemUploaderId === uploaderId;
+        });
+        const photoIds = photosToDelete.map((item) => item.id);
+        const filePaths = photosToDelete.map((item) => item.url.substring(item.url.indexOf('/events/') + 8));
+
+        if (photoIds.length > 0) {
+          const { error: deleteError } = await supabase
+            .from('photos')
+            .delete()
+            .in('id', photoIds);
+
+          if (deleteError) {
+            console.error("Error deleting restricted uploader photos:", deleteError);
+            toast.error('Restricted, but failed to remove existing photos');
+          } else {
+            setPhotos((current) => current.filter((item) => !photoIds.includes(item.id)));
+            if (filePaths.length > 0) {
+              await supabase.storage.from('events').remove(filePaths);
+            }
+            toast.success(`Restricted ${uploaderName} and removed their photos`);
+          }
+        } else {
+          toast.success(`${uploaderName} restricted`);
+        }
+      } else {
+        toast.success(`${uploaderName} restricted`);
+      }
       window.dispatchEvent(new CustomEvent('restricted-uploaders-changed', { detail: { eventId } }));
     }
+
+    setIsRestricting(false);
+    setRestrictionTarget(null);
+    setRemoveRestrictedPhotos(false);
   };
 
   if (loading) {
@@ -244,6 +320,7 @@ export default function Gallery({ eventId, eventName, isCreator }) {
             isSelected={selectedIds.includes(photo.id)}
             onToggleSelect={() => toggleSelection(photo.id)}
             isCreator={isCreator}
+            currentUploaderId={currentUploaderId}
             onRestrictUploader={() => handleRestrictUploader(photo)}
           />
         ))}
@@ -292,16 +369,99 @@ export default function Gallery({ eventId, eventName, isCreator }) {
           </div>
         </div>
       )}
+
+      {restrictionTarget && (
+        <div 
+          className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4"
+          onClick={closeRestrictionModal}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-md overflow-hidden rounded-2xl border border-theme-3/25 bg-theme-2 shadow-2xl"
+          >
+            <button
+              onClick={closeRestrictionModal}
+              disabled={isRestricting}
+              className="absolute right-4 top-4 text-theme-4/60 hover:text-theme-4 transition-colors disabled:opacity-50"
+              title="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="px-6 pt-6 pb-5 border-b border-theme-3/20">
+              <div className="flex items-center gap-3 pr-8">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-theme-1/70 text-red-100 ring-1 ring-red-200/20">
+                  <Ban className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-xl font-bold text-theme-4">Restrict guest</h2>
+                  <p className="truncate text-sm font-bold text-theme-4/65">
+                    {restrictionTarget.uploaderName}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm leading-6 text-theme-4/80">
+                This guest will no longer be able to upload photos to this event.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => setRemoveRestrictedPhotos((value) => !value)}
+                className={`w-full rounded-xl border px-4 py-3 text-left transition-all ${
+                  removeRestrictedPhotos
+                    ? 'border-red-200/40 bg-red-500/15 text-red-50'
+                    : 'border-theme-3/25 bg-theme-1/35 text-theme-4 hover:bg-theme-1/50'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+                    removeRestrictedPhotos ? 'border-red-100 bg-red-100 text-theme-1' : 'border-theme-4/45'
+                  }`}>
+                    {removeRestrictedPhotos && <CheckCircle2 className="h-3.5 w-3.5" />}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-bold">Remove existing photos</span>
+                    <span className="block text-xs text-theme-4/60">
+                      Delete photos already uploaded by this guest.
+                    </span>
+                  </span>
+                </span>
+              </button>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 bg-theme-1/25 px-6 py-4">
+              <button
+                onClick={closeRestrictionModal}
+                disabled={isRestricting}
+                className="rounded-full border border-theme-3/25 px-4 py-2 text-sm font-bold text-theme-4 hover:bg-theme-1/40 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmRestrictUploader}
+                disabled={isRestricting}
+                className="rounded-full bg-theme-3 px-5 py-2 text-sm font-bold text-theme-1 shadow-sm hover:bg-theme-4 transition-colors disabled:opacity-50"
+              >
+                {isRestricting ? 'Restricting...' : 'Restrict'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
 
-function PhotoCard({ photo, eventName, onShowQR, selectionMode, isSelected, onToggleSelect, isCreator, onRestrictUploader }) {
+function PhotoCard({ photo, eventName, onShowQR, selectionMode, isSelected, onToggleSelect, isCreator, currentUploaderId, onRestrictUploader }) {
   const [showOverlay, setShowOverlay] = useState(false);
   const safeName = (eventName || 'Event').replace(/[^a-zA-Z0-9]/g, '_');
   const timeStr = (photo.created_at ? new Date(photo.created_at) : new Date()).toTimeString().split(' ')[0].replace(/:/g, '-');
   const downloadName = `${safeName}_${timeStr}.jpg`;
   const uploadedBy = photo.uploaded_by?.trim() || photo.uploader_id?.trim() || 'Guest';
+  const isCurrentUploader = Boolean(currentUploaderId && photo.uploader_id?.trim() === currentUploaderId);
 
   if (selectionMode) {
     return (
@@ -376,7 +536,7 @@ function PhotoCard({ photo, eventName, onShowQR, selectionMode, isSelected, onTo
             <span className="text-xs font-bold shadow-black drop-shadow-md">Scan QR</span>
          </button>
 
-         {isCreator && (
+         {isCreator && !isCurrentUploader && (
           <button
             onClick={(e) => {
               e.stopPropagation();

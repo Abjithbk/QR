@@ -121,11 +121,16 @@ export default function EventLive() {
 
       {/* Main Gallery Area */}
       <main className="container mx-auto max-w-7xl pt-8 px-4">
-        <Gallery eventId={eventId} eventName={eventData.name} isCreator={isCreator} />
+        <Gallery
+          eventId={eventId}
+          eventName={eventData.name}
+          isCreator={isCreator}
+          currentUploaderId={guestId}
+        />
       </main>
 
       {/* Floating Action Button for Camera Capture */}
-      <CameraCapture eventId={eventId} guestId={guestId} />
+      <CameraCapture eventId={eventId} guestId={guestId} isCreator={isCreator} />
 
       {/* QR Code Modal Overlay */}
       {showQR && (

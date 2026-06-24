@@ -32,13 +32,99 @@ CREATE TABLE restricted_uploaders (
   UNIQUE (event_id, uploader_id)
 );
 
+CREATE TABLE uploader_profiles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id UUID REFERENCES events(id) ON DELETE CASCADE,
+  uploader_id TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  last_name_changed_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  UNIQUE (event_id, uploader_id)
+);
+
+DROP FUNCTION IF EXISTS refresh_uploader_display_name(UUID, TEXT, TEXT);
+DROP FUNCTION IF EXISTS refresh_uploader_display_name(UUID, TEXT, TEXT, BOOLEAN);
+
+CREATE OR REPLACE FUNCTION refresh_uploader_display_name(
+  p_event_id UUID,
+  p_uploader_id TEXT,
+  p_display_name TEXT,
+  p_is_creator BOOLEAN DEFAULT false
+)
+RETURNS TEXT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_display_name TEXT := btrim(coalesce(p_display_name, ''));
+  v_current_display_name TEXT;
+  v_last_name_changed_at TIMESTAMP WITH TIME ZONE;
+  v_profile_exists BOOLEAN := false;
+  v_name_change_cooldown INTERVAL := INTERVAL '24 hours';
+  v_is_event_creator BOOLEAN := false;
+BEGIN
+  IF v_display_name = '' THEN
+    RETURN NULL;
+  END IF;
+
+  SELECT display_name, last_name_changed_at
+  INTO v_current_display_name, v_last_name_changed_at
+  FROM uploader_profiles
+  WHERE event_id = p_event_id
+    AND uploader_id = p_uploader_id
+  FOR UPDATE;
+
+  v_profile_exists := FOUND;
+
+  SELECT EXISTS (
+    SELECT 1
+    FROM events
+    WHERE id = p_event_id
+      AND user_id = auth.uid()
+  )
+  INTO v_is_event_creator;
+
+  IF NOT v_profile_exists THEN
+    INSERT INTO uploader_profiles (event_id, uploader_id, display_name)
+    VALUES (p_event_id, p_uploader_id, v_display_name);
+  ELSIF v_current_display_name IS DISTINCT FROM v_display_name THEN
+    IF NOT (p_is_creator AND v_is_event_creator)
+      AND v_last_name_changed_at IS NOT NULL
+      AND v_last_name_changed_at + v_name_change_cooldown > now()
+    THEN
+      RAISE EXCEPTION 'Please wait 24 hours before changing your display name again.';
+    END IF;
+
+    UPDATE uploader_profiles
+    SET display_name = v_display_name,
+        last_name_changed_at = now(),
+        updated_at = now()
+    WHERE event_id = p_event_id
+      AND uploader_id = p_uploader_id;
+  END IF;
+
+  UPDATE photos
+  SET uploaded_by = v_display_name
+  WHERE event_id = p_event_id
+    AND uploader_id = p_uploader_id;
+
+  RETURN v_display_name;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION refresh_uploader_display_name(UUID, TEXT, TEXT, BOOLEAN) TO anon, authenticated;
+
 -- 2. Enable Realtime for the 'photos' table
 ALTER PUBLICATION supabase_realtime ADD TABLE photos;
+ALTER TABLE photos REPLICA IDENTITY FULL;
 
 -- 3. Enable Row Level Security (RLS)
 ALTER TABLE events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE photos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE restricted_uploaders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE uploader_profiles ENABLE ROW LEVEL SECURITY;
 
 -- ========================================================
 -- Events Table Policies

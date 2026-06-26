@@ -6,7 +6,7 @@ import { useSync } from '../contexts/SyncContext';
 
 export default function CameraCapture({ eventId, guestId, isCreator }) {
   const [uploadState, setUploadState] = useState({ uploading: false, done: 0, total: 0 });
-  const { isOnline, queueCount, syncing, notifyItemQueued } = useSync();
+  const { isOnline, queueCount,downloadQueueCount, syncing, notifyItemQueued } = useSync();
   const displayNameStorageKey = eventId && guestId ? `arc-display-name-${eventId}-${guestId}` : '';
   const [displayName, setDisplayName] = useState(() => {
     if (!displayNameStorageKey) return '';
@@ -154,12 +154,24 @@ export default function CameraCapture({ eventId, guestId, isCreator }) {
         disabled={uploading}
       />
 
-      {(!isOnline || queueCount > 0) && (
-        <div className="flex items-center justify-center gap-2 mb-3 bg-yellow-500/20 text-yellow-200 text-xs px-3 py-1.5 rounded-full border border-yellow-500/30">
+            {(!isOnline || queueCount > 0 || downloadQueueCount > 0) && (
+        <div className="flex flex-col items-center gap-1 mb-3 text-xs">
           {syncing ? (
-            <><Loader2 className="w-3 h-3 animate-spin" /> Syncing {queueCount} photos...</>
+            <div className="flex items-center justify-center gap-2 bg-yellow-500/20 text-yellow-200 px-3 py-1.5 rounded-full border border-yellow-500/30">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Syncing...
+            </div>
           ) : (
-            <><WifiOff className="w-3 h-3" /> {queueCount > 0 ? `${queueCount} waiting to sync` : 'Offline'}</>
+            <>
+              <div className="flex items-center justify-center gap-3 bg-yellow-500/20 text-yellow-200 px-3 py-1.5 rounded-full border border-yellow-500/30">
+                <WifiOff className="w-3 h-3 shrink-0" />
+                {!isOnline && <span>Offline</span>}
+                {queueCount > 0 && <span>{queueCount} upload{queueCount !== 1 ? 's' : ''} queued</span>}
+                {queueCount > 0 && downloadQueueCount > 0 && <span className="text-yellow-300/50">•</span>}
+                {downloadQueueCount > 0 && <span>{downloadQueueCount} download{downloadQueueCount !== 1 ? 's' : ''} queued</span>}
+              </div>
+              {isOnline && queueCount === 0 && downloadQueueCount === 0 && null}
+            </>
           )}
         </div>
       )}

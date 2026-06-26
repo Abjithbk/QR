@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { supabase } from '../services/supabase';
+import { downloadPhoto } from '../services/storage';
+import { useSync } from '../contexts/SyncContext';
 import { QRCodeSVG } from 'qrcode.react';
 import { Download, QrCode, X, Trash2, CheckCircle2, Ban } from 'lucide-react';
 import PhotoLightbox from './PhotoLightbox';
@@ -23,6 +25,24 @@ export default function Gallery({ eventId, eventName, isCreator, currentUploader
   const [isDragDeleting, setIsDragDeleting] = useState(false);
   const loaderRef = useRef(null);
   const LIMIT = 50;
+
+  const {isOnline,notifyDownloadQueued} = useSync();
+
+  const handleDownloadClick = async (e, url, filename) => {
+    e.stopPropagation(); // Prevents the lightbox from opening
+    try {
+      const result = await downloadPhoto(url, filename);
+      if (result?.offline) {
+        notifyDownloadQueued();
+        toast.success('Photo saved to download queue!');
+      } else {
+        toast.success('Downloading photo...');
+      }
+    } catch (error) {
+      console.error("Download failed:", error);
+      toast.error('Failed to download photo');
+    }
+  };
 
   useEffect(() => {
     if (!eventId) return;
@@ -380,6 +400,7 @@ export default function Gallery({ eventId, eventName, isCreator, currentUploader
             onRestrictUploader={() => handleRestrictUploader(photo)}
             onDragStart={(e) => handleDragStart(e, photo.id)}
             onDragEnd={handleDragEnd}
+            onDownload = {handleDownloadClick}
           />
         ))}
       </div>
@@ -546,7 +567,7 @@ export default function Gallery({ eventId, eventName, isCreator, currentUploader
   );
 }
 
-function PhotoCard({ photo, eventName, onShowQR, onOpenLightbox, selectionMode, isSelected, onToggleSelect, isCreator, currentUploaderId, onRestrictUploader, onDragStart, onDragEnd }) {
+function PhotoCard({ photo, eventName, onShowQR, onOpenLightbox, selectionMode, isSelected, onToggleSelect, isCreator, currentUploaderId, onRestrictUploader, onDragStart, onDragEnd,onDownload }) {
   const [showOverlay, setShowOverlay] = useState(false);
   const [isDraggingCard, setIsDraggingCard] = useState(false);
   const safeName = (eventName || 'Event').replace(/[^a-zA-Z0-9]/g, '_');
@@ -610,20 +631,16 @@ function PhotoCard({ photo, eventName, onShowQR, onOpenLightbox, selectionMode, 
       <div
         className={`absolute inset-0 bg-black/40 transition-opacity duration-300 flex items-center justify-center gap-4 ${showOverlay ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
       >
-         <a
-          href={`${photo.url}?download=${downloadName}`}
-          download={downloadName}
-          target="_blank"
-          rel="noreferrer"
+         <button
+          onClick={(e) => onDownload(e, photo.url, downloadName)}
           className="flex flex-col items-center justify-center text-white hover:text-theme-3 transition-colors"
           title="Download Directly"
-          onClick={(e) => e.stopPropagation()}
          >
             <div className="bg-white/20 p-3 rounded-full backdrop-blur-md mb-2 hover:bg-white/30 transition-colors">
               <Download className="w-6 h-6" />
             </div>
             <span className="text-xs font-bold shadow-black drop-shadow-md">Save</span>
-         </a>
+         </button>
 
          <button
           onClick={(e) => {

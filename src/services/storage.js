@@ -1,6 +1,6 @@
 import imageCompression from 'browser-image-compression';
 import { supabase } from './supabase';
-import { savePhotoToQueue } from './offlineQueue';
+import { savePhotoToQueue,saveDownloadToQueue } from './offlineQueue';
 
 export const compressImage = async (file) => {
   const options = {
@@ -134,4 +134,37 @@ export const uploadPhoto = async (eventId, file, uploader, options = {}) => {
     }
     throw error;
   }
+};
+
+export const downloadPhoto = async (url,filename) => {
+
+  if(!navigator.onLine) {
+    console.log("Offline mode detected. saving download to queue")
+    await saveDownloadToQueue({url,filename})
+    return {offline:true};
+  }
+
+  try {
+    const res = await fetch(url)
+    const blob = await res.blob()
+    const blobUrl = window.URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(blobUrl);
+  }
+  catch (error) {
+    console.error("Download failed:", error);
+    // If it fails due to a network drop mid-download, queue it just in case
+    if (!navigator.onLine) {
+      await saveDownloadToQueue({ url, filename });
+      return { offline: true };
+    }
+    throw error;
+
+}
 };
